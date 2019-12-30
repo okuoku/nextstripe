@@ -1,0 +1,8 @@
+New-SelfSignedCertificate -DnsName "flow.local" -NotAfter (Get-Date).AddYears(50) -CertStoreLocation "cert:\CurrentUser\My"
+
+openssl pkcs12 -in flowlocal.pfx -nodes -out key.pem
+kubectl create secret tls flowlocal-tls --cert=key.pem --key=key.pem
+
+----
+
+

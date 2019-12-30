@@ -1,0 +1,104 @@
+# FIXME:
+# FIXME: Unfortunately, some of options need to be modified post-install
+# FIXME: namely,
+# FIXME:
+# FIXME:  - ALLOW_ONLY_EXTERNAL_REGISTRATION = true
+# FIXME:  - DISABLE_REGISTRATION = false
+# FIXME:  - ENABLE_OPENID_SIGNUP = true
+# FIXME:  - OFFLINE_MODE = true
+# FIXME:  - DISABLE_GRAVATAR = true
+# FIXME:
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: gitea
+    namespace: default
+    labels:
+        app: gitea
+spec:
+    replicas: 1
+    template:
+        metadata:
+            name: gitea
+            labels: 
+                app: gitea
+        spec:
+            hostAliases:
+                - ip: "192.168.1.209"
+                  hostnames:
+                      - "flow.local"
+            containers:
+                - name: gitea-app
+                  image: gitea/gitea:latest
+                  imagePullPolicy: Always
+                  volumeMounts:
+                      - mountPath: "/data"
+                        name: data
+                      - mountPath: "/cer"
+                        name: localcacerts
+                  env:
+                      - name: SSL_CERT_FILE
+                        value: "/cer/local.cer"
+                      - name: APP_NAME
+                        value: "Gitea: Flow.local"
+                      - name: DISABLE_SSH
+                        value: "true"
+                      - name: DISABLE_REGISTRATION
+                        value: "true"
+                      - name: REQUIRE_SIGNIN_VIEW
+                        value: "true"
+                      - name: ROOT_URL
+                        value: "https://flow.local/gt"
+                  ports:
+                      - containerPort: 3000
+                        name: http
+                        protocol: TCP
+            volumes:
+                - name: data
+                  persistentVolumeClaim:
+                      claimName: localstorage
+                - name: localcacerts
+                  configMap:
+                      name: localcacerts
+                      items:
+                          - key: local.cer
+                            path: local.cer
+    selector:
+        matchLabels:
+            app: gitea
+---
+apiVersion: v1
+kind: Service
+metadata:
+    name: gitea
+    namespace: default
+    labels:
+        app: gitea
+spec:
+    ports:
+        - port: 80
+          targetPort: 3000
+          name: http
+    selector:
+        app: gitea
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+    name: gitea
+    namespace: default
+    annotations:
+        # We need this, otherwise it will 302-loop on /install
+        traefik.ingress.kubernetes.io/rewrite-target: /
+spec:
+    rules:
+        - host: flow.local
+          http:
+              paths:
+                  - backend:
+                      serviceName: gitea
+                      servicePort: 80
+                    path: /gt
+
+

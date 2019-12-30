@@ -1,0 +1,137 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+    name: ncconfig
+    namespace: default
+data:
+    myroot.config.php: |
+        <?php
+        $CONFIG = array (
+        'trusted_proxies' => ['10.0.0.0/8'],
+        'overwriteprotocol' => 'https',
+        'overwritehost' => 'flow.local',
+        'overwritewebroot' => '/nc',
+        'allow_user_to_change_display_name' => false,
+        'lost_password_link' => 'disabled',
+        'oidc_login_client_id' => 'nc-oauth2',
+        'oidc_login_client_secret' => '4tk5QSwXOin6Uf1zhhxwqKBoAX6jf54',
+        'oidc_login_provider_url' => 'https://flow.local/dex',
+        'oidc_login_button_text' => 'Log in with OpenID',
+        'oidc_login_attributes' => array (
+            'id' => 'sub',
+            'name' => 'name',
+            'mail' => 'mail',
+            'home' => 'name',
+        ),
+        'oidc_login_disable_registration' => false,
+        'oidc_login_redir_fallback' => false,
+        );
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: nextcloud
+    namespace: default
+    labels: 
+        app: nextcloud
+spec:
+    replicas: 1
+    template:
+        metadata:
+            name: nextcloud
+            labels:
+                app: nextcloud
+        spec:
+            containers:
+                - name: "nextcloud-app"
+                  image: "nextcloud:17-apache"
+                  imagePullPolicy: Always
+                  volumeMounts:
+                      - mountPath: "/var/www/html/data"
+                        name: data
+                      - mountPath: "/var/www/html/config"
+                        name: config
+                      - mountPath: "/cer"
+                        name: localcacerts
+                  command:
+                      - sh
+                      - "-c"
+                      - "cp /cer/local.cer /usr/local/share/ca-certificates/local.crt && update-ca-certificates && /entrypoint.sh apache2-foreground"
+
+                  ports:
+                      - containerPort: 80
+                        name: http
+                        protocol: TCP
+            hostAliases:
+                - ip: "192.168.1.209"
+                  hostnames:
+                      - "flow.local"
+            initContainers:
+                - name: cnf
+                  image: busybox
+                  volumeMounts:
+                      - mountPath: "/cfg"
+                        name: config
+                      - mountPath: "/cfg_ro"
+                        name: config-ro
+                  command:
+                      - sh
+                      - "-c"
+                      - "cp /cfg_ro/* /cfg"
+            volumes:
+                - name: data
+                  persistentVolumeClaim:
+                      claimName: localnc2
+                - name: localcacerts
+                  configMap:
+                      name: localcacerts
+                      items:
+                          - key: local.cer
+                            path: local.cer
+                - name: config
+                  persistentVolumeClaim:
+                      claimName: localnc-config
+                - name: config-ro
+                  configMap:
+                      name: ncconfig
+                      items:
+                          - key: myroot.config.php
+                            path: myroot.config.php
+    selector:
+        matchLabels:
+            app: nextcloud
+---
+apiVersion: v1
+kind: Service
+metadata: 
+    name: nextcloud
+    namespace: default
+    labels:
+        app: nextcloud
+spec:
+    ports:
+        - port: 80
+          targetPort: 80
+          name: http
+    selector:
+        app: nextcloud
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+    name: nextcloud
+    namespace: default
+    annotations:
+        traefik.ingress.kubernetes.io/rewrite-target: /
+spec:
+    rules:
+        - host: flow.local
+          http:
+              paths:
+                  - backend:
+                      serviceName: nextcloud
+                      servicePort: 80
+                    path: /nc
+

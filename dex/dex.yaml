@@ -1,0 +1,155 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+    name: dexconfig
+    namespace: default
+data:
+    ldap.cer: |
+        -----BEGIN CERTIFICATE-----
+        MIIBcTCCARsCBgFso5FSijANBgkqhkiG9w0BAQUFADBCMQswCQYDVQQGEwJVUzEM
+        MAoGA1UEChMDQVNGMRIwEAYDVQQLEwlEaXJlY3RvcnkxETAPBgNVBAMTCEFwYWNo
+        ZURTMB4XDTE5MDgxODA3MTE0NVoXDTIwMDgxNzA3MTE0NVowQDELMAkGA1UEBhMC
+        VVMxDDAKBgNVBAoTA0FTRjESMBAGA1UECxMJRGlyZWN0b3J5MQ8wDQYDVQQDEwZz
+        dHJpcGUwXDANBgkqhkiG9w0BAQEFAANLADBIAkEAlWJvWfgNsE2wBELXb4wSAk1S
+        FfojfPH7sI3nQla1EAeS1B4+dsUCCvQqdAvn4wcaX2caGaHkGDGDhQx/RPTjcwID
+        AQABMA0GCSqGSIb3DQEBBQUAA0EAJEyq83NsmRSx0Rd5Paipouk40Rud+JOPzOUy
+        smt2x3gpV8TM9JIfAefcbsmiih43AuqZPMSkWUvYjnSMjNVCww==
+        -----END CERTIFICATE-----
+
+    dexconfig.yaml: |
+        logger:
+            level: debug
+            format: text
+        issuer: https://flow.local/dex
+        storage: 
+            type: sqlite3
+            config:
+                file: ":memory:"
+        web:
+            http: 0.0.0.0:5556
+        oauth2:
+            skipApprovalScreen: true
+        enablePasswordDB: false
+        connectors:
+            - type: ldap
+              name: ApacheDS
+              id: ldap
+              config:
+                  # Use openssl s_client -starttls ldap -showcerts stripe.local:10389
+                  # to find out CN, that needs to be used as hostname
+                  host: stripe:10636 # 10636 is for LDAPS
+                  bindDN: cn=lookup,ou=users,o=testing
+                  bindPW: $LDAP_PW
+                  usernamePrompt: "ApacheDS username"
+                  rootCA: /cnf/ldap.cer # we could rootCAData
+
+                  userSearch:
+                      baseDN: ou=users,o=testing
+                      username: cn
+                      idAttr: cn
+                      emailAttr: mail
+                      nameAttr: cn
+
+                  groupSearch:
+                      baseDN: o=testing
+                      filter: "(objectClass=groupOfUniqueNames)"
+                      userAttr: DN
+                      groupAttr: uniqueMember
+                      nameAttr: cn
+
+        staticClients:
+            - id: nc-oauth2
+              redirectURIs:
+                  - https://flow.local/nc/index.php/apps/oidc_login/oidc
+              name: "Nextcloud"
+              secret: 4tk5QSwXOin6Uf1zhhxwqKBoAX6jf54
+            - id: gitea-oauth2
+              redirectURIs:
+                  - https://flow.local/gt/user/oauth2/dex/callback
+              name: "Gitea"
+              secret: J7ooWUSuo1mObncODGKvrmSsAqFwu70
+            - id: testing
+              redirectURIs:
+                  - http://localhost:8080/callback
+              name: "testing"
+              secret: testing
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: dex
+    namespace: default
+    labels:
+        app: dex
+spec:
+    replicas: 1
+    template:
+        metadata:
+            name: dex
+            labels:
+                app: dex
+        spec:
+            hostAliases:
+                - ip: "192.168.1.208"
+                  hostnames:
+                      - "stripe"
+            containers:
+                - image: quay.io/dexidp/dex:v2.21.0
+                  name: dex
+                  command: ["/usr/local/bin/dex", "serve", "/cnf/dexconfig.yaml"]
+                  ports:
+                      - name: http
+                        containerPort: 5556
+                  volumeMounts:
+                      - name: config
+                        mountPath: /cnf
+                  env:
+                      - name: LDAP_PW
+                        valueFrom:
+                            secretKeyRef:
+                                name: credentials
+                                key: LDAP_PW
+            volumes:
+                - name: config
+                  configMap:
+                      name: dexconfig
+                      items:
+                          - key: dexconfig.yaml
+                            path: dexconfig.yaml
+                          - key: ldap.cer
+                            path: ldap.cer
+    selector:
+        matchLabels:
+            app: dex
+---
+apiVersion: v1
+kind: Service
+metadata:
+    name: dex
+    namespace: default
+    labels:
+        app: dex
+spec:
+    ports:
+        - port: 5556
+          targetPort: 5556
+          name: http
+    selector:
+        app: dex
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+    name: dex
+    namespace: default
+spec:
+    rules:
+        - host: flow.local
+          http:
+              paths:
+                  - backend:
+                      serviceName: dex
+                      servicePort: 5556
+                    path: /dex
+

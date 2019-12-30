@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: hello
+    namespace: default
+    labels:
+        app: hello
+spec:
+    replicas: 1
+    template:
+        metadata:
+            name: hello
+            labels:
+                app: hello
+        spec:
+            containers:
+                - name: hello
+                  image: nginxdemos/hello
+                  imagePullPolicy: Always
+                  ports:
+                      - containerPort: 80
+                        name: http
+                        protocol: TCP
+            restartPolicy: Always
+    selector:
+        matchLabels:
+            app: hello
+---
+apiVersion: v1
+kind: Service
+metadata:
+    name: hello
+    namespace: default
+    labels:
+        app: hello
+spec:
+    ports:
+        - port: 80
+          targetPort: 80
+          name: http
+    selector:
+        app: hello
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: flow.local
+  namespace: default
+  annotations:
+      # Is for v1.7 which bundled with k3s.
+      # See https://docs.traefik.io/migration/v1-to-v2/#http-to-https-redirection-is-now-configured-on-routers
+      ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+    rules:
+        - host: flow.local
+          http:
+              paths:
+                  - path: /
+                    backend:
+                        serviceName: hello
+                        servicePort: 80
+    tls:
+        - hosts:
+            - flow.local
+          secretName: flowlocal-tls

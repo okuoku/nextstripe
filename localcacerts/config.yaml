@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+    name: localcacerts
+    namespace: default
+data:
+    local.cer: |
+        -----BEGIN CERTIFICATE-----
+        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
+        -----END CERTIFICATE-----
+

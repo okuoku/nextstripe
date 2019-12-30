@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: Pod
+metadata:
+    name: mdns
+    namespace: default
+
+spec:
+    hostNetwork: true
+    dnsPolicy: ClusterFirstWithHostNet
+    containers:
+        - name: mdns
+          image: solidnerd/avahi:0.7
+          volumeMounts:
+              - name: cnf
+                mountPath: /etc/avahi
+          ports:
+              - containerPort: 5353
+                hostIP: 192.168.1.209
+                protocol: TCP
+              - containerPort: 5353
+                hostIP: 192.168.1.209
+                protocol: UDP
+    initContainers:
+        - name: cnf
+          image: busybox
+          volumeMounts:
+              - name: cnf
+                mountPath: /etc/avahi
+          command:
+              - sh
+              - "-c"
+              - "echo \"[server]\nhost-name=flow\ndomain-name=local\nuse-ipv4=yes\nenable-dbus=no\n[wide-area]\nenable-wide-area=no\n\n\" > /etc/avahi/avahi-daemon.conf"
+
+    volumes:
+        - name: cnf
+          emptyDir: {}
