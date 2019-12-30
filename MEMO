@@ -1,4 +1,4 @@
-New-SelfSignedCertificate -DnsName "flow.local" -NotAfter (Get-Date).AddYears(50) -CertStoreLocation "cert:\CurrentUser\My"
+New-SelfSignedCertificate -DnsName "flow.local" -NotAfter (Get-Date).AddYears(50) -CertStoreLocation "cert:\CurrentUser\My" -KeyLength 4096 -Type SSLServerAuthentication -TextExtension @("2.5.29.19 = {critical} {text}ca=1&pathlength=0") -KeyUsage CertSign,KeyEncipherment,DigitalSignature
 
 openssl pkcs12 -in flowlocal.pfx -nodes -out key.pem
 kubectl create secret tls flowlocal-tls --cert=key.pem --key=key.pem
