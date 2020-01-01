@@ -15,10 +15,10 @@ spec:
                 mountPath: /etc/avahi
           ports:
               - containerPort: 5353
-                hostIP: 192.168.1.209
+                hostIP: 192.168.1.150
                 protocol: TCP
               - containerPort: 5353
-                hostIP: 192.168.1.209
+                hostIP: 192.168.1.150
                 protocol: UDP
     initContainers:
         - name: cnf
