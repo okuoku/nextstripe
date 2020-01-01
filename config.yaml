@@ -1,0 +1,17 @@
+# static IP config from https://github.com/rancher/k3os/issues/68#issuecomment-492089070
+write_files:
+    - encoding: ""
+      content: |-
+          #!/bin/bash
+          ETH0=$(connmanctl services|awk '{ print $3 }' | while read -r s1; do connmanctl services $s1 | grep -q "eth0" && echo "$s1"; done)
+          connmanctl config $ETH0 --ipv4 manual 192.168.1.150 255.255.255.0 192.168.1.200 --nameservers 192.168.1.200
+          connmanctl config $ETH0 --domains flow.local
+          connmanctl config $ETH0 --timeservers ntp.nict.jp
+          service connman restart
+      owner: root:root
+      path: /etc/run-cmd.sh
+      permissions: '0755'
+
+run_cmd:
+    - "/etc/run-cmd.sh"
+
