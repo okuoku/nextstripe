@@ -1,0 +1,3 @@
+kubectl get secret -n kube-system | grep admin
+
+kubectl get secret -n kube-system admin-user-token-26tt2  -o "jsonpath={.data.token}" | base64 --decode
